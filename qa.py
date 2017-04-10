@@ -27,6 +27,7 @@ def textToSentences(text):
 	he_count = 0
 	she_count = 0
 	for i in range(len(first_paragraph)):
+		lower_sen = first_paragraph[i].lower()
 		it_count += lower_sen.count(' it ') + lower_sen.count(' its ')
 		he_count += lower_sen.count(' he ') + lower_sen.count(' his ')
 		she_count += lower_sen.count(' she ') + lower_sen.count(' her ')
@@ -113,7 +114,7 @@ def treeFromSentence(sentence):
 
 def isPerson(np):
 	np_tags = getTags(np)
-	if np_tags[0][0] == 'PRP':
+	if np_tags[0][1] == 'PRP':
 		return True
 	else:
 		entities = nltk.chunk.ne_chunk(np_tags)
@@ -124,13 +125,13 @@ def isPerson(np):
 
 def questionNPVP(np,vp,topic,topic_type):
 	if isPerson(np):
-		if topic_type != 'it' or (not np in topic and not topic in np):
+		it_true = not np in topic and not topic in np and len(getTags(np)) < 4
+		if topic_type != 'it' or it_true:
 			return 'Who ' + vp + '?'
 		return 'What ' + vp + '?'
 	return None
 
 def questionModify(questions,topic,topic_type):
-	print(topic_type)
 	for i in range(len(questions)):
 		if topic_type == 'it':
 			#pattern_1 = re.compile(re.escape(' it '),re.IGNORECASE)
