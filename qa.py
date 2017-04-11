@@ -7,7 +7,7 @@ import re
 # download and install a basic unified parsing model (Wall Street Journal)
 # sudo python -m nltk.downloader bllip_wsj_no_aux
 model_dir = nltk.data.find('models/bllip_wsj_no_aux').path
-rrp = RerankingParser.from_unified_model_dir(model_dir)
+rrp = RerankingParser.from_unified_model_dir(str(model_dir))
 
 def textToSentences(text):
 	tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
