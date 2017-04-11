@@ -6,8 +6,10 @@ import re
 #Python 3
 # download and install a basic unified parsing model (Wall Street Journal)
 # sudo python -m nltk.downloader bllip_wsj_no_aux
+
+#In the required Python3, no need to typecast to str
 model_dir = nltk.data.find('models/bllip_wsj_no_aux').path
-rrp = RerankingParser.from_unified_model_dir(str(model_dir))
+rrp = RerankingParser.from_unified_model_dir(model_dir)
 
 def textToSentences(text):
 	tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -304,6 +306,16 @@ def answerQuestion(question,text):
 
 	#Need to do a non Who and What case, currently return topic
 	return topic
+
+def answerQuestions(file_questions,file_in):
+	f = open(file_in)
+	text = f.read()
+	f.close()
+	f = open(file_questions)
+	questions = f.readlines()
+	f.close()
+	for question in questions:
+		print(answerQuestion(question.strip(),text))
 
 '''
 def writeRuleHelp(preterminal,t,rules):
