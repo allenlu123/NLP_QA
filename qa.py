@@ -315,7 +315,9 @@ def answerQuestions(file_questions,file_in):
 	questions = f.readlines()
 	f.close()
 	for question in questions:
-		print(answerQuestion(question.strip(),text))
+		question = question.strip()
+		if len(question) > 0:
+			print(answerQuestion(question,text))
 
 '''
 def writeRuleHelp(preterminal,t,rules):
