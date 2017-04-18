@@ -25,6 +25,8 @@ def textToSentences(text):
 	topic = topic.strip()
 	for i in range(len(sentences)):
 		sentences[i] = sentences[i].translate(translation_table)
+		if '\n' in sentences[i]:
+			sentences[i] = sentences[i].split('\n')[1].strip()
 	first_paragraph = tokenizer.tokenize(text.split('\n\n')[1])
 	it_count = 0
 	he_count = 0
@@ -41,7 +43,7 @@ def textToSentences(text):
 		topic_type = 'he'
 	else:
 		topic_type = 'she'
-	return (topic,topic_type,sentences)
+	return (topic,topic_type,list(filter(None,sentences)))
 
 def getTags(sentence):
 	return nltk.pos_tag(nltk.word_tokenize(sentence))
@@ -200,6 +202,11 @@ def questionsFromText(file_in,n):
 	for question in questions:
 		print(question)
 
+def removePuncAndStop(s,translation_table):
+	s = nltk.word_tokenize(s.translate(translation_table))
+	return [word for word in s
+			if not word in nltk.corpus.stopwords.words('english')]
+
 '''
 Function that computes the Damerau-Levenshtein
 distance between an input string and the
@@ -217,21 +224,12 @@ to less penalize inserts (substrings), more penalize deletes.
 Calculates WER.
 '''
 def damerLev(initial_str,final_str):
-	if initial_str == final_str:
-		return 0
-	translation_table = str.maketrans({key: None for key in string.punctuation})
-	initial_str = nltk.word_tokenize(initial_str.translate(translation_table))
-	initial_str = [word for word in initial_str
-					if not word in nltk.corpus.stopwords.words('english')]
-	final_str = nltk.word_tokenize(final_str.translate(translation_table))
-	final_str = [word for word in final_str
-				if not word in nltk.corpus.stopwords.words('english')]
 	n = len(initial_str)
 	m = len(final_str)
 	if n == 0:
 		return m
 	if m == 0:
-		return n * 5
+		return n * 6
 
 	table = [[j for j in range(m + 1)] if i == 0
 			else [i * 5 if k == 0 else 0 for k in range(m + 1)]
@@ -281,31 +279,53 @@ def answerModify(answer,topic,topic_type):
 
 def answerQuestion(question,text):
 	(topic,topic_type,sentences) = textToSentences(text)
-	#Currently just supports fuzzy matching, Who and What
-	t = treeFromSentence(question)
-	if t.child_tags[0][0] == 'WHNP':
-		sq = t.child_tags[1][1]
-		best_response = None
-		best_wer = None
+	translation_table = str.maketrans({key: None for key in string.punctuation})
+	if (question.startswith('What is ') or question.startswith('what is ') or
+		question.startswith('Who is ') or question.startswith('who is ')):
+		starter = removePuncAndStop(question,translation_table)[1:]
 		for sentence in sentences:
-			t = treeFromSentence(sentence)
-			parsed = t.child_tags
-			if len(parsed) > 1:
-				first = parsed[0]
-				second = parsed[1]
-				if first[0] == 'NP' and second[0] == 'VP':
-					wer = damerLev(sq,second[1])
-					if best_wer == None or wer < best_wer:
-						best_response = first[1]
-						best_wer = wer
-					wer = damerLev(sq,first[1])
-					if best_wer == None or wer < best_wer:
-						best_response = second[1]
-						best_wer = wer
-		return answerModify(' ' + best_response + ' ',topic,topic_type).strip()
+			if ' is ' in sentence:
+				start = removePuncAndStop(sentence.split(' is ')[0],translation_table)
+				answer = True
+				for word in starter:
+					if not word in start:
+						answer = False
+						break
+				if answer:
+					return sentence
+	elif (question.startswith('What are ') or question.startswith('what are ') or
+			question.startswith('Who are ') or question.startswith('who are ')):
+		starter = removePuncAndStop(question,translation_table)[1:]
+		for sentence in sentences:
+			if ' are ' in sentence:
+				start = removePuncAndStop(sentence.split(' are ')[0],translation_table)
+				answer = True
+				for word in starter:
+					if not word in start:
+						answer = False
+						break
+				if answer:
+					return sentence
 
-	#Need to do a non Who and What case, currently return topic
-	return topic
+	#Currently just supports fuzzy matching, Who and What
+	question = removePuncAndStop(question,translation_table)[1:]
+	best_response = None
+	best_wer = None
+	for sentence in sentences:
+		wer = damerLev(question,removePuncAndStop(sentence,translation_table))
+		if best_wer == None or wer < best_wer:
+			best_response = sentence
+			best_wer = wer
+	if best_response == None:
+		return topic
+	modify_answer = True
+	for word in topic.split():
+		if word in best_response:
+			modify_answer = False
+			break
+	if modify_answer:
+		return answerModify(' ' + best_response + ' ',topic,topic_type).strip()
+	return best_response
 
 def answerQuestions(file_questions,file_in):
 	f = open(file_in)
