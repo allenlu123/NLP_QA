@@ -3,14 +3,28 @@ import string
 from bllipparser import RerankingParser
 import re
 
-#Python 3
-# download and install a basic unified parsing model (Wall Street Journal)
-# sudo python -m nltk.downloader bllip_wsj_no_aux
+'''
+Python 3
 
-#In the required Python3, no need to typecast to str
+download and install a basic unified parsing model (Wall Street Journal) via:
+sudo python -m nltk.downloader bllip_wsj_no_aux
+'''
+
+'''
+Global variables created on startup of the file
+'''
 model_dir = nltk.data.find('models/bllip_wsj_no_aux').path
 rrp = RerankingParser.from_unified_model_dir(model_dir)
 
+
+'''
+Functions for the Question-Answering System
+'''
+
+'''
+Turns input article text to sentences, and extracts the main
+topic of the article as well as the type of topic (male/female/object).
+'''
 def textToSentences(text):
 	tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 	sentences = tokenizer.tokenize(text)
@@ -45,12 +59,21 @@ def textToSentences(text):
 		topic_type = 'she'
 	return (topic,topic_type,list(filter(None,sentences)))
 
+'''
+POS tagging.
+'''
 def getTags(sentence):
 	return nltk.pos_tag(nltk.word_tokenize(sentence))
 
+'''
+From a scored parse object, returns an NLTK Tree.
+'''
 def scoredParseToTree(scored_parse):
 	return nltk.tree.Tree.fromstring(str(scored_parse.ptb_parse))
 
+'''
+Obtain the best parse tree for a sentence, string representation.
+'''
 def getParseTree(sentence):
 	words = []
 	tag_map = {}
@@ -69,6 +92,9 @@ def getParseTree(sentence):
 		#return best parse tree
 		return re.sub('\s+', ' ',str(scoredParseToTree(scored_parse))).strip()
 
+'''
+Tree object representing a parse tree. Easier access of parse tags.
+'''
 class Tree(object):
 	def __init__(self):
 		self.child_tags = []
@@ -76,6 +102,10 @@ class Tree(object):
 		self.sentence = ''
 		self.tag = ''
 
+'''
+Recursive helper function to make a Tree object from the
+string representation of the parse tree (DFS)
+'''
 def makeTreeHelp(parsed,parsed_len,start,tag):
 	curr_tree = Tree()
 	curr_tree.tag = tag
@@ -105,6 +135,9 @@ def makeTreeHelp(parsed,parsed_len,start,tag):
 
 	return (curr_tree,i + 1)
 
+'''
+Makes a Tree object from a string representation of the parse tree.
+'''
 def makeTree(parsed):
 	parsed = parsed[parsed.index(' ') + 1:][:-1]
 
@@ -113,10 +146,16 @@ def makeTree(parsed):
 		return tree.children[0]
 	return tree
 
+'''
+Obtains the parse tree of a sentence.
+'''
 def treeFromSentence(sentence):
 	parsed = getParseTree(sentence)
 	return makeTree(parsed)
 
+'''
+Detects if the Noun Phrase is referring to a person.
+'''
 def isPerson(np,topic,topic_type):
 	if np in topic and topic_type != 'it':
 		return True
@@ -130,6 +169,9 @@ def isPerson(np,topic,topic_type):
 				return True
 	return False	
 
+'''
+Creates simple Who/What questions from NP-VP sentences.
+'''
 def questionNPVP(np,vp,topic,topic_type):
 	if isPerson(np,topic,topic_type):
 		it_true = not np in topic and not topic in np and len(getTags(np)) < 4
@@ -138,26 +180,32 @@ def questionNPVP(np,vp,topic,topic_type):
 		return 'What ' + vp + '?'
 	return None
 
+'''
+Modifies question so that any mentions of generic pronouns
+maps to the topic of the article. Only modifies if the topic
+is not already mentioned in the question
+(which is the highest chance pronoun refers to the topic).
+'''
 def questionModify(questions,topic,topic_type):
 	for i in range(len(questions)):
-		if topic_type == 'it':
-			#pattern_1 = re.compile(re.escape(' it '),re.IGNORECASE)
-			pattern_2 = re.compile(re.escape(' its '),re.IGNORECASE)
-			pattern_3 = re.compile(re.escape(' it?'),re.IGNORECASE)
-			questions[i] = pattern_3.sub(' ' + topic + '?',questions[i])
-		elif topic_type == 'he':
-			#pattern_1 = re.compile(re.escape(' he '),re.IGNORECASE)
-			pattern_2 = re.compile(re.escape(' his '),re.IGNORECASE)
-			pattern_3 = re.compile(re.escape(' he?'),re.IGNORECASE)
-			questions[i] = pattern_3.sub(' ' + topic + '?',questions[i])
-		else:
-			#pattern_1 = re.compile(re.escape(' she '),re.IGNORECASE)
-			pattern_2 = re.compile(re.escape(' her '),re.IGNORECASE)
-			pattern_3 = re.compile(re.escape(' she?'),re.IGNORECASE)
-			questions[i] = pattern_3.sub(' ' + topic + '?',questions[i])
-		#questions[i] = pattern_1.sub(' ' + topic + ' ',questions[i])
-		questions[i] = pattern_2.sub(' ' + topic + '\'s ',questions[i])
+		if not topic in questions[i]:
+			if topic_type == 'it':
+				pattern_1 = re.compile(re.escape(' its '),re.IGNORECASE)
+				pattern_2 = re.compile(re.escape(' it?'),re.IGNORECASE)
+			elif topic_type == 'he':
+				pattern_1 = re.compile(re.escape(' his '),re.IGNORECASE)
+				pattern_2 = re.compile(re.escape(' he?'),re.IGNORECASE)
+			else:
+				pattern_1 = re.compile(re.escape(' her '),re.IGNORECASE)
+				pattern_2 = re.compile(re.escape(' she?'),re.IGNORECASE)
+			questions[i] = pattern_2.sub(' ' + topic + '?',questions[i])
+			questions[i] = pattern_1.sub(' ' + topic + '\'s ',questions[i])
 
+'''
+Main function to generate questions from text, using
+parsing of sentences into parse trees and finding
+sentences that can be turned into good questions.
+'''
 def generateQuestions(text,n):
 	(topic,topic_type,sentences) = textToSentences(text)
 	questions = []
@@ -194,6 +242,9 @@ def generateQuestions(text,n):
 	questionModify(questions,topic,topic_type)
 	return questions
 
+'''
+Generates questions based on an input article.
+'''
 def questionsFromText(file_in,n):
 	f = open(file_in)
 	text = f.read()
@@ -202,6 +253,9 @@ def questionsFromText(file_in,n):
 	for question in questions:
 		print(question)
 
+'''
+Removes puntuation and stop words from a sentence.
+'''
 def removePuncAndStop(s,translation_table):
 	s = nltk.word_tokenize(s.translate(translation_table))
 	return [word for word in s
@@ -263,6 +317,11 @@ def damerLev(initial_str,final_str):
 
 	return table[n][m]
 
+'''
+Most likely, when the answer contains the generalized pronoun
+and no reference to the topic entity, the generalized pronoun
+will represent the topic entity.
+'''
 def answerModify(answer,topic,topic_type):
 	if topic_type == 'it':
 		pattern_1 = re.compile(re.escape(' it '),re.IGNORECASE)
@@ -277,9 +336,14 @@ def answerModify(answer,topic,topic_type):
 	answer = pattern_1.sub(' ' + topic + ' ',answer)
 	return pattern_2.sub(' ' + topic + '\'s ',answer)
 
+'''
+Function to answer a question based on the article text.
+'''
 def answerQuestion(question,text):
 	(topic,topic_type,sentences) = textToSentences(text)
 	translation_table = str.maketrans({key: None for key in string.punctuation})
+
+	#Common cases of to be verb tuple seeding created questions
 	if (question.startswith('What is ') or question.startswith('what is ') or
 		question.startswith('Who is ') or question.startswith('who is ')):
 		starter = removePuncAndStop(question,translation_table)[1:]
@@ -307,7 +371,7 @@ def answerQuestion(question,text):
 				if answer:
 					return sentence
 
-	#Currently just supports fuzzy matching, Who and What
+	#Fuzzy matching based solution using modified WER (deletion penalized)
 	question = removePuncAndStop(question,translation_table)[1:]
 	best_response = None
 	best_wer = None
@@ -327,6 +391,10 @@ def answerQuestion(question,text):
 		return answerModify(' ' + best_response + ' ',topic,topic_type).strip()
 	return best_response
 
+'''
+Answers questions from the questions file based
+on the text in the article file.
+'''
 def answerQuestions(file_questions,file_in):
 	f = open(file_in)
 	text = f.read()
@@ -338,42 +406,4 @@ def answerQuestions(file_questions,file_in):
 		question = question.strip()
 		if len(question) > 0:
 			print(answerQuestion(question,text))
-
-'''
-def writeRuleHelp(preterminal,t,rules):
-	if len(t.children) == 0:
-		rhs = ' -> ' + t.sentence
-		if not t.tag in rules:
-			rules[t.tag] = {rhs:1}
-		elif not rhs in rules[t.tag]:
-			rules[t.tag][rhs] = 1
-		else:
-			rules[t.tag][rhs] += 1
-		return
-	rhs = ' -> ' + ' '.join([tag[0] for tag in t.child_tags])
-	if not preterminal in rules:
-		rules[preterminal] = {rhs:1}
-	elif not rhs in rules[preterminal]:
-		rules[preterminal][rhs] = 1
-	else:
-		rules[preterminal][rhs] += 1
-	for child in t.children:
-		writeRuleHelp(child.tag,child,rules)
-
-def writeRules(file_in,file_out):
-	f = open(file_in)
-	arr = f.readlines()
-	f.close()
-
-	rules = {'ROOT': {}}
-	for i in range(len(arr)):
-		rules['ROOT'][' -> S1'] = 1
-		writeRuleHelp('S1',treeFromSentence(arr[i]),rules)
-	f = open(file_out,'w+')
-	for key in rules.keys():
-		for rhs in rules[key].keys():
-			count = rules[key][rhs]
-			f.write(key + rhs + ' ' + str(count) + '\n')
-	f.close()
-'''
 			
