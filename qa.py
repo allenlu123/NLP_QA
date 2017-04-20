@@ -337,6 +337,15 @@ def answerModify(answer,topic,topic_type):
 	return pattern_2.sub(' ' + topic + '\'s ',answer)
 
 '''
+Checks if a sentence contains a GPE
+'''
+def containsLocation(sentence):
+	for t in nltk.chunk.ne_chunk(getTags(sentence)):
+		if isinstance(t,nltk.tree.Tree) and t._label == 'GPE':
+			return True
+	return False
+
+'''
 Function to answer a question based on the article text.
 '''
 def answerQuestion(question,text):
@@ -370,16 +379,34 @@ def answerQuestion(question,text):
 						break
 				if answer:
 					return sentence
+	elif question.startswith('Where ') or question.startswith('where '):
+		starter = removePuncAndStop(question,translation_table)[1:]
+		best_response = None
+		best_count = 0
+		for sentence in sentences:
+			if containsLocation(sentence):
+				sentence_list = removePuncAndStop(sentence,translation_table)
+				temp_count = 0
+				for word in starter:
+					if word in sentence_list:
+						temp_count += 1
+				if temp_count > best_count:
+					best_count = temp_count
+					best_response = sentence
+		if best_response != None:
+			return best_response
 
 	#Fuzzy matching based solution using modified WER (deletion penalized)
 	question = removePuncAndStop(question,translation_table)[1:]
 	best_response = None
 	best_wer = None
 	for sentence in sentences:
-		wer = damerLev(question,removePuncAndStop(sentence,translation_table))
-		if best_wer == None or wer < best_wer:
-			best_response = sentence
-			best_wer = wer
+		#Checks for non-trivial sentence
+		if len(sentence) > 2:
+			wer = damerLev(question,removePuncAndStop(sentence,translation_table))
+			if best_wer == None or wer < best_wer:
+				best_response = sentence
+				best_wer = wer
 	if best_response == None:
 		return topic
 	modify_answer = True
